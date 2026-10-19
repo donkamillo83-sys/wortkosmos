@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <!-- Sicherheit: Die App darf nur eigene Dateien laden und keine Daten an fremde Server senden -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Wortkosmos – Dein Vokabel-Abenteuer</title>
+  <meta name="description" content="Spielerisch Englisch-Vokabeln lernen: Quiz, Schreiben, Karteikarten und eine Reise durch den Wortkosmos.">
+  <meta name="theme-color" content="#070A1C">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Wortkosmos">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="sky" aria-hidden="true"></canvas>
+  <main id="app" class="app" aria-live="polite"></main>
+  <nav id="nav" class="nav" aria-label="Hauptmenü" hidden></nav>
+  <noscript><p style="padding:24px;color:#fff">Wortkosmos braucht JavaScript. Bitte im Browser aktivieren.</p></noscript>
+  <script src="js/data.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/ui-parts.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
