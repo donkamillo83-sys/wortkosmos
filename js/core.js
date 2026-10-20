@@ -4,6 +4,7 @@
   "use strict";
 
   const STORAGE_KEY = "wortkosmos.v1";
+  const SKILL_TARGET = 12; // so viele Punkte braucht ein Mathe-Planet für 100 %
   const SCHEMA = 1;
 
   /* ---------- Hilfsfunktionen ---------- */
@@ -49,6 +50,8 @@
       answers: 0,
       correct: 0,
       stats: {},
+      skills: {},
+      subject: "en",
       lists: freshLists(data),
       createdAt: Date.now()
     };
@@ -96,8 +99,21 @@
     const planetKeys = data.planets.map((p) => p.key);
     const out = base;
     out.profile = s.profile && typeof s.profile === "object" && str(s.profile.name, 20).trim()
-      ? { name: str(s.profile.name, 20).trim(), avatar: data.avatars.some((a) => a.key === s.profile.avatar) ? s.profile.avatar : data.avatars[0].key }
+      ? {
+          name: str(s.profile.name, 20).trim(),
+          avatar: data.avatars.some((a) => a.key === s.profile.avatar) ? s.profile.avatar : data.avatars[0].key,
+          grade: data.grades.some((g) => g.key === s.profile.grade) ? s.profile.grade : null
+        }
       : null;
+    out.subject = data.subjects.some((x) => x.key === s.subject) ? s.subject : "en";
+    out.skills = {};
+    if (s.skills && typeof s.skills === "object") {
+      Object.keys(s.skills).slice(0, 500).forEach((k) => {
+        if (!/^[A-Za-z0-9_-]{1,40}$/.test(k)) return;
+        const v = s.skills[k] || {};
+        out.skills[k] = { score: Math.min(SKILL_TARGET, num(v.score)), seen: num(v.seen), ok: num(v.ok), bad: num(v.bad), last: num(v.last, 1e14) };
+      });
+    }
     out.settings = { sound: !(s.settings && s.settings.sound === false) };
     ["stars", "xp", "bestStreak", "bestSession", "missions", "answers", "correct"].forEach((k) => { out[k] = num(s[k]); });
     out.correct = Math.min(out.correct, out.answers);
@@ -281,11 +297,11 @@
 
   /* ---------- Lerneinheit zusammenstellen ----------
      Neue und schwache Wörter kommen öfter dran. */
-  function pickWords(state, list, n, onlyHard) {
-    let pool = list.words.filter((w) => w.en && w.de);
-    if (onlyHard) pool = pool.filter((w) => isHard(getStat(state, list.id, w.id)));
+  function pickItems(state, prefix, items, n, onlyHard) {
+    let pool = items.slice();
+    if (onlyHard) pool = pool.filter((w) => isHard(getStat(state, prefix, w.id)));
     const scored = pool.map((w) => {
-      const s = getStat(state, list.id, w.id);
+      const s = getStat(state, prefix, w.id);
       const age = s.last ? (Date.now() - s.last) / 3.6e6 : 999;
       const score = (5 - s.box) * 3 + (s.seen ? 0 : 4) + Math.min(age / 24, 3) + s.bad + Math.random() * 3;
       return { w, score };
@@ -293,14 +309,90 @@
     scored.sort((a, b) => b.score - a.score);
     return shuffle(scored.slice(0, n).map((x) => x.w));
   }
+  function pickWords(state, list, n, onlyHard) {
+    return pickItems(state, list.id, list.words.filter((w) => w.en && w.de), n, onlyHard);
+  }
 
   // Im Mix-Modus richtet sich die Übung nach dem Lernstand: erkennen -> erinnern -> schreiben
-  function modeForWord(state, listId, word) {
+  function modeForWord(state, listId, word, young) {
     const box = getStat(state, listId, word.id).box;
     if (box === 0) return "quiz";
+    if (young) { // Volksschule: mehr erkennen, weniger frei schreiben
+      if (box === 1) return Math.random() < 0.5 ? "quiz" : "scramble";
+      return Math.random() < 0.6 ? "scramble" : "en";
+    }
     if (box === 1) return Math.random() < 0.5 ? "de" : "scramble";
     if (box === 2) return Math.random() < 0.6 ? "en" : "scramble";
     return "en";
+  }
+
+  /* ---------- Mathe-Fortschritt pro Thema ---------- */
+  function getSkill(state, key) {
+    return state.skills[key] || { score: 0, seen: 0, ok: 0, bad: 0, last: 0 };
+  }
+  function recordSkill(state, key, correct) {
+    const s = Object.assign({ score: 0, seen: 0, ok: 0, bad: 0, last: 0 }, state.skills[key]);
+    s.seen++; s.last = Date.now();
+    if (correct) { s.ok++; s.score = Math.min(SKILL_TARGET, s.score + 1); }
+    else { s.bad++; s.score = Math.max(0, s.score - 1); }
+    state.skills[key] = s;
+    state.answers++;
+    if (correct) state.correct++;
+    return s;
+  }
+
+  /* ---------- Lernpfad: Planeten je Fach und Klasse ----------
+     Knoten-Arten: vocab (Englisch-Liste), bank (Deutsch-Aufgaben), gen (Mathe) */
+  function nodeFor(state, data, subject, key, extras) {
+    if (subject === "en") {
+      const l = state.lists.find((x) => x.planet === key);
+      return l ? { kind: "vocab", subject, id: l.id, key, name: l.name, short: l.short, colors: l.colors, ring: l.ring, list: l } : null;
+    }
+    if (subject === "de") {
+      const t = extras.de && extras.de.topics.find((x) => x.key === key);
+      return t ? { kind: "bank", subject, id: "d-" + key, key, name: t.name, short: t.short, colors: t.colors, ring: t.ring, topic: t, items: extras.de.items(t) } : null;
+    }
+    const t = extras.ma && extras.ma.topics.find((x) => x.key === key);
+    return t ? { kind: "gen", subject, id: "m-" + key, key, name: t.name, short: t.short, colors: t.colors, ring: t.ring, topic: t } : null;
+  }
+
+  function path(state, data, subject, grade, extras) {
+    const p = (data.paths[grade] || data.paths.ms1)[subject] || [];
+    return p.map((k) => nodeFor(state, data, subject, k, extras)).filter(Boolean);
+  }
+
+  function nodeInfo(state, node) {
+    if (node.kind === "vocab") return listInfo(state, node.list);
+    if (node.kind === "bank") {
+      let learned = 0, hard = 0, seen = 0;
+      node.items.forEach((it) => {
+        const s = getStat(state, node.id, it.id);
+        if (s.box >= 2) learned++;
+        if (s.seen) seen++;
+        if (isHard(s)) hard++;
+      });
+      const total = node.items.length;
+      return { total, learned, hard, seen, mastery: total ? learned / total : 0 };
+    }
+    const sk = getSkill(state, node.key);
+    return { total: sk.seen, learned: sk.ok, hard: 0, seen: sk.seen, mastery: sk.score / SKILL_TARGET, accuracy: sk.seen ? sk.ok / sk.seen : 0 };
+  }
+  const nodeMastery = (state, node) => nodeInfo(state, node).mastery;
+
+  function nodeUnlocked(state, nodes, node) {
+    const i = nodes.indexOf(node);
+    if (i <= 0) return true;
+    return nodeMastery(state, nodes[i - 1]) >= UNLOCK_AT;
+  }
+
+  function currentNode(state, nodes) {
+    let cur = nodes[0];
+    for (const n of nodes) {
+      if (!nodeUnlocked(state, nodes, n)) break;
+      cur = n;
+      if (nodeMastery(state, n) < 0.8) break;
+    }
+    return cur;
   }
 
   function distractors(state, list, word, count) {
@@ -315,7 +407,7 @@
   }
 
   /* ---------- Sterne, XP, Level ---------- */
-  const STAR_VALUES = { quiz: 1, flash: 1, scramble: 2, de: 2, en: 3 };
+  const STAR_VALUES = { quiz: 1, flash: 1, scramble: 2, de: 2, en: 3, choice: 1, text: 2, num: 2, time: 2, frac: 3 };
 
   function starsFor(mode, result, usedHint) {
     if (result === "wrong") return 0;
@@ -373,7 +465,8 @@
     freshState, freshLists, load, save, migrate,
     normalize, variants, lev, check,
     wordKey, getStat, record, isHard, mastery, listInfo, planets, isUnlocked, currentPlanet, allHardWords, UNLOCK_AT,
-    pickWords, modeForWord, distractors,
+    pickItems, pickWords, modeForWord, distractors,
+    SKILL_TARGET, getSkill, recordSkill, path, nodeInfo, nodeMastery, nodeUnlocked, currentNode,
     starsFor, levelInfo, touchStreak, liveStreak,
     parsePairs
   });

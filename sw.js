@@ -1,8 +1,8 @@
 /* Wortkosmos – Offline-Speicher. Nach Änderungen an Dateien VERSION erhöhen. */
-const VERSION = "wk-1.2.0";
+const VERSION = "wk-2.0.0";
 const SHELL = [
   "./", "index.html", "css/style.css", "manifest.webmanifest",
-  "js/data.js", "js/core.js", "js/ui-parts.js", "js/app.js",
+  "js/data.js", "js/data-de.js", "js/math.js", "js/core.js", "js/ui-parts.js", "js/app.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png",
   "fonts/fredoka-latin-400-normal.woff2", "fonts/fredoka-latin-500-normal.woff2", "fonts/fredoka-latin-600-normal.woff2", "fonts/fredoka-latin-700-normal.woff2",
   "fonts/lexend-latin-400-normal.woff2", "fonts/lexend-latin-500-normal.woff2", "fonts/lexend-latin-600-normal.woff2"

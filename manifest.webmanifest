@@ -1,7 +1,7 @@
 {
-  "name": "Wortkosmos – Dein Vokabel-Abenteuer",
+  "name": "Wortkosmos – Dein Lern-Abenteuer",
   "short_name": "Wortkosmos",
-  "description": "Spielerisch Englisch-Vokabeln lernen.",
+  "description": "Spielerisch Englisch, Deutsch und Mathe üben.",
   "lang": "de",
   "start_url": "./",
   "scope": "./",
